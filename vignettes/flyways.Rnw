@@ -1,4 +1,4 @@
-\documentclass{article}
+\documentclass[a4paper]{article}
 %\VignetteEngine{knitr::knitr}
 %\VignetteIndexEntry{Flyways: Identifying the flyways boundaries of migratory bird species}
 %\VignetteDepends{knitr,sp,rworldmap,rworldxtra,splines,spatstat}
