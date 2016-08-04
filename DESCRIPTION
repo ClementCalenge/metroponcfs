@@ -1,0 +1,13 @@
+Package: metroponcfs
+Type: Package
+Title: Metropolis algorithm for model fitting
+Version: 1.0
+Date: 2016-07-04
+Author: Clement Calenge
+Maintainer: Clement Calenge <clement.calenge@oncfs.gouv.fr>
+Depends: R (>= 3.0.1), MASS, coda
+Suggests: knitr, sp, rworldmap, rworldxtra, splines, spatstat
+Description: this package implements the Metropolis algorithm.
+VignetteBuilder: knitr
+LazyData: true
+License: GPL (>=2)
