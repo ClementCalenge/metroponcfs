@@ -297,8 +297,6 @@ recaptured in the area where the two flyways overlap belongs to the
 British population at recapture time. We now define the notations
 $\boldsymbol{\theta}_1,\boldsymbol{\theta}_2, \Theta_1(\mathbf{v}_k),
 \Theta_2(\mathbf{v}_k)$.\\
-% XX gaffe ya inversion dans
-% l'article pour psi21.
 
 The vector $\boldsymbol{\theta}_1$ is the vector containing the 22
 coefficients (corresponding to the 22 B-spline basis functions) of the
