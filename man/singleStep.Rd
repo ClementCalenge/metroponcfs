@@ -6,12 +6,14 @@
 \alias{singleStep}
 \title{Updating mechanisms used in the metropolis algorithm}
 \usage{
-singleStep(par, lidat, nam, pum, ctrl, logposterior, postcur, optimiser)
+singleStep(par, lidat, nam, pum, ctrl, logposterior, postcur, optimiser, debug,
+  dumpfile, composition)
 
 MultipleIndependentSteps(par, lidat, nam, pum, ctrl, logposterior, postcur,
-  optimiser)
+  optimiser, debug, dumpfile, composition)
 
-MultiNormalStep(par, lidat, nam, pum, ctrl, logposterior, postcur, optimiser)
+MultiNormalStep(par, lidat, nam, pum, ctrl, logposterior, postcur, optimiser,
+  debug, dumpfile, composition)
 }
 \arguments{
 \item{par}{a named list containing the parameters of the model (the
@@ -56,6 +58,16 @@ etc. calculates the current posterior (prior to updating) and does
 not take into account the value of \code{postcur} passed to the
 function. If FALSE, the function relies on the value of
 \code{postcur} passed as argument for the updating.}
+
+\item{debug}{logical. If \code{TRUE} the updating should be run in
+debugging mode.}
+
+\item{dumpfile}{character. The name of the debugging file.}
+
+\item{composition}{character. How composition of parameters are
+managed (see the help page of
+\code{GeneralSingleMetropolis}). Currently, only used by
+\code{MultipleIndependentSteps}.}
 }
 \value{
 A list with three elements: (i) parm is the updated vector

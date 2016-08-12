@@ -279,11 +279,21 @@ findStartingValues <- function(support, logposterior, lidat,
 
 
 .iterMetrop <- function(par, lidat, logposterior, lipum, NamesP, UpdatingMechanism,
-                        liopt)
+                        liopt, composition, debug, tempf2, optionsDebug)
 {
     ## Posterior courante (inutilisée si optimisation de la mise à jour d'un paramètre)
     postcur <- logposterior(par, lidat, list(namePar="No221cc9328Parameter23",iter=1))
     opti <- FALSE
+    if (debug) {
+        cat("##\n##\n## LLLInit: Log-Posterior:", postcur, "\n",file=tempf2, append=TRUE)
+        if (optionsDebug$showPar)
+            saveprm("## PPPInit: Value of the parameters:", "par", par, tempf2)
+        if (optionsDebug$showSeed) {
+            presentseed <- .save_rng()
+            saveprm("## PPPInit: restore the seed", "presentseed", presentseed, tempf2)
+            cat("metroponcfs:::.restore_rng(presentseed)\n", file=tempf2, append=TRUE)
+        }
+    }
 
     ## "working parameter"
     parw <- par
@@ -291,12 +301,26 @@ findStartingValues <- function(support, logposterior, lidat,
     ## liste d'acceptation
     accept <- list()
 
+    ## Ordre des paramètres
+    nesp <- 1:length(parw)
+    if (composition=="random")
+        nesp <- sample(1:length(NamesP))
+    if (debug) {
+        if (composition=="random")
+            saveprm("## NNNInit: order of sampling (random composition):", "nesp", nesp, tempf2)
+        cat("\n\n## ** Starting per-parameters update \n", file=tempf2, append=TRUE)
+    }
+
     ## Mise à jour de a:
     for (j in 1:length(parw)) {
 
         ## Les paramètres nécessaires
-        nam <- NamesP[j]
-        fun <- UpdatingMechanism[j]
+        nam <- NamesP[nesp[j]]
+        fun <- UpdatingMechanism[nesp[j]]
+
+        if (debug) {
+            cat("\n## ********* Updating Parameter", nam, "\n", file=tempf2, append=TRUE)
+        }
 
         ## Si optimisation pour le paramètre précédent et pas pour le paramètre courant,
         ## recalculer la posterior courante
@@ -311,7 +335,8 @@ findStartingValues <- function(support, logposterior, lidat,
         liparam <- list(par=parw, lidat=lidat, nam=nam, pum=lipum[[nam]],
                         ctrl=list(namePar=nam,iter=1),
                         logposterior=logposterior,
-                        postcur=postcur, optimiser=opti)
+                        postcur=postcur, optimiser=opti, debug=debug,
+                        dumpfile=tempf2, composition)
         resm <- do.call(fun, liparam)
 
         ## Résultats
@@ -319,10 +344,41 @@ findStartingValues <- function(support, logposterior, lidat,
         accept[[nam]] <- resm$accept
         postcur <- resm$postcur
     }
-
+    parw <- lapply(1:length(NamesP), function(i) parw[[NamesP[i]]])
+    accept <- lapply(1:length(NamesP), function(i) accept[[NamesP[i]]])
+    names(parw) <- NamesP
+    names(accept) <- NamesP
+    if (debug)
+        cat("\n\n\n\n\n", file=tempf2, append=TRUE)
     return(list(par=parw, accept=accept, postcur=postcur))
 }
 
+## Solution inspired by Ben Bolker to save state of RNG
+## here:
+## https://stackoverflow.com/questions/13997444/print-the-current-random-seed-so-that-i-can-enter-it-with-set-seed-later
+.save_rng <- function() {
+    if (!exists(".Random.seed"))  {
+        runif(1)
+    }
+    seed <- get(".Random.seed", .GlobalEnv)
+    RNGkind <- RNGkind()
+    sr <- list(seed=seed, RNGkind=RNGkind)
+    return(sr)
+}
+
+.restore_rng <- function(sr) {
+    do.call("RNGkind",as.list(sr$RNGkind))
+    assign(".Random.seed", sr$seed, .GlobalEnv)
+}
+
+## Debug:
+saveprm <- function(title, name, value, file)
+{
+    cat(title, "\n", file=file, append=TRUE)
+    cat(paste0(name, " <- ", paste(deparse(value), collapse="\n")),
+        file=file, append=TRUE)
+    cat("\n", file=file, append=TRUE)
+}
 
 
 #' @title Updating mechanisms used in the metropolis algorithm
@@ -370,6 +426,13 @@ findStartingValues <- function(support, logposterior, lidat,
 #' not take into account the value of \code{postcur} passed to the
 #' function. If FALSE, the function relies on the value of
 #' \code{postcur} passed as argument for the updating.
+#' @param debug logical. If \code{TRUE} the updating should be run in
+#' debugging mode.
+#' @param dumpfile character. The name of the debugging file.
+#' @param composition character. How composition of parameters are
+#' managed (see the help page of
+#' \code{GeneralSingleMetropolis}). Currently, only used by
+#' \code{MultipleIndependentSteps}.
 #'
 #' @return A list with three elements: (i) parm is the updated vector
 #' of parameters, (ii) postcur is the value of the (optionally
@@ -383,33 +446,37 @@ findStartingValues <- function(support, logposterior, lidat,
 #' @import graphics
 #' @import stats
 singleStep <- function(par, lidat, nam, pum, ctrl, logposterior,
-                       postcur, optimiser)
+                       postcur, optimiser, debug, dumpfile, composition)
 {
     parw <- par
     prev <- parw[[nam]]
+
+    if (debug)
+        cat("## >> singleStep updating\n", file=dumpfile, append=TRUE)
+
     ## si optimisation, on doit calculer la posterior à priori
     ## sinon, on prend l'argument
     if (optimiser) {
         postcur <- logposterior(parw, lidat, ctrl)
     }
     nex <- prev+rnorm(1, mean=0, sd=pum)
+
     parw[[nam]] <- nex
     postnext <- logposterior(parw, lidat, ctrl)
-    if (is.infinite(postnext)&is.infinite(postcur)) {
-        tf <- tempfile("dumpmetrop", tmpdir=".", fileext = ".Rdata")
-        li <- list(par=par, lidat=lidat, nam=nam, ctrl=ctrl, logposterior=logposterior,
-                   postcur=postcur, postnext=postnext, optimiser=optimiser, i=NA,
-                   nex=nex, prev=prev, parw=parw, functionError="SingleStep")
-        save(li, file=tf)
-        msg <- paste0("Error with update of parameter ", nam,
-                      ":\ninfinite current and next log-posterior.\n",
-                      "All necessary information has been dumped in file", tf,"\n",
-                      "Reload this file to explore the state of the chain when the error occured")
-        stop(msg)
-    }
     alpha <- min(c(1,exp(postnext-postcur)))
     un <- runif(1)<alpha
     accept <- as.numeric(un)
+    if (debug) {
+        saveprm(paste0("## <1> ", "Old value of ", nam, " (log-posterior=", postcur,"):"),
+                "prev", prev, dumpfile)
+        saveprm(paste0("## <2> ", "Proposal value of ", nam, " (log-posterior=", postnext,"):"),
+                "nex", nex, dumpfile)
+        cat(paste0("## <3> Metropolis ratio: min(1,",
+                   exp(postnext-postcur)),")\n", file=dumpfile, append=TRUE)
+        saveprm(c("## <4> We accept", "## <4> We reject")[c(un,!un)],
+                paste0("par[[\"", nam, "\"]] "), ifelse(un, nex, prev), dumpfile)
+    }
+
     parm <- ifelse(un, nex, prev)
     pc <- ifelse(un, postnext, postcur)
     return(list(parm=parm, postcur=postcur, accept=accept))
@@ -419,37 +486,53 @@ singleStep <- function(par, lidat, nam, pum, ctrl, logposterior,
 #' @rdname singleStep
 #' @export
 MultipleIndependentSteps <- function(par, lidat, nam, pum, ctrl, logposterior,
-                                     postcur, optimiser)
+                                     postcur, optimiser, debug, dumpfile, composition)
 {
     parw <- par
     parm <- parw[[nam]]
+    if (debug)
+        cat("## >> MultipleIndependentSteps updating\n", file=dumpfile, append=TRUE)
+
     accept <- rep(0,length(parm))
+    nesp <- 1:length(parm)
+    if (composition=="random")
+        nesp <- sample(1:length(parm))
+    if (debug) {
+        if (composition=="random")
+            saveprm("## Composition: order of sampling for this parameter:", "nespb",
+                    nesp, dumpfile)
+        cat("## \n\n## ** Starting per-parameters update \n\n", file=dumpfile, append=TRUE)
+    }
 
     for (i in 1:length(parm)) {
-        ctrl$iter <- i
+        ctrl$iter <- nesp[i]
         if (optimiser) {
             postcur <- logposterior(parw, lidat, ctrl)
         }
-        prev <- parm[i]
-        nex <- prev+rnorm(1, mean=0, sd=pum[i])
-        parm[i] <- nex
+        prev <- parm[nesp[i]]
+        nex <- prev+rnorm(1, mean=0, sd=pum[nesp[i]])
+        parm[nesp[i]] <- nex
         parw[[nam]] <- parm
         postnext <- logposterior(parw, lidat, ctrl)
-        if (is.infinite(postnext)&is.infinite(postcur)) {
-            tf <- tempfile("dumpmetrop", tmpdir=".", fileext = ".Rdata")
-            li <- list(par=par, lidat=lidat, nam=nam, ctrl=ctrl, logposterior=logposterior,
-                       postcur=postcur, postnext=postnext, optimiser=optimiser, i=i,
-                       nex=nex, prev=prev, parw=parw, functionError="MultipleIndependentSteps")
-            save(li, file=tf)
-            msg <- paste0("Error with update of parameter ", nam,
-                          ":\ninfinite current and next log-posterior.\n",
-                          "All necessary information has been dumped in file", tf)
-            stop(msg)
-        }
         alpha <- min(c(1,exp(postnext-postcur)))
         un <- runif(1)<alpha
-        accept[i] <- un
-        parm[i] <- ifelse(un, nex, prev)
+        accept[nesp[i]] <- un
+        if (debug) {
+            cat(paste0("## EEEEi Element ", nesp[i], " of the parameter ", nam, "\n"),
+                file=dumpfile, append=TRUE)
+            saveprm(paste0("## <1> ", "Old value of ", nam, "[", nesp[i],
+                           "] (log-posterior=", postcur,"):"),
+                    "prev", prev, dumpfile)
+            saveprm(paste0("## <2> ", "Proposal value of ", nam, "[", nesp[i],
+                           "] (log-posterior=", postnext,"):"),
+                    "nex", nex, dumpfile)
+            cat(paste0("## <3> Metropolis ratio: min(1,",
+                       exp(postnext-postcur)),")\n", file=dumpfile, append=TRUE)
+            saveprm(c("## <4> We accept", "## <4> We reject")[c(un,!un)],
+                    paste0("par[[\"", nam, "\"]][",nesp[i],"] "), ifelse(un, nex, prev), dumpfile)
+        }
+
+        parm[nesp[i]] <- ifelse(un, nex, prev)
         postcur <- ifelse(un, postnext, postcur)
     }
 
@@ -460,31 +543,36 @@ MultipleIndependentSteps <- function(par, lidat, nam, pum, ctrl, logposterior,
 #' @rdname singleStep
 #' @export
 MultiNormalStep <- function(par, lidat, nam, pum, ctrl, logposterior,
-                            postcur, optimiser)
+                            postcur, optimiser, debug, dumpfile, composition)
 {
     parw <- par
     prev <- parw[[nam]]
+    if (debug)
+        cat("## >> MultiNormalStep updating\n", file=dumpfile, append=TRUE)
+
     if (optimiser) {
         postcur <- logposterior(parw, lidat, ctrl)
     }
     nex <- prev+MASS::mvrnorm(1, mu=rep(0,ncol(pum)), Sigma=pum)
     parw[[nam]] <- nex
     postnext <- logposterior(parw, lidat, ctrl)
-    if (is.infinite(postnext)&is.infinite(postcur)) {
-        tf <- tempfile("dumpmetrop", tmpdir=".", fileext = ".Rdata")
-        li <- list(par=par, lidat=lidat, nam=nam, ctrl=ctrl, logposterior=logposterior,
-                   postcur=postcur, postnext=postnext, optimiser=optimiser, i=NA,
-                   nex=nex, prev=prev, parw=parw, functionError="MultiNormalStep")
-        save(li, file=tf)
-        msg <- paste0("Error with update of parameter ", nam,
-                      ":\ninfinite current and next log-posterior.\n",
-                      "All necessary information has been dumped in file", tf)
-        stop(msg)
-    }
-
     alpha <- min(c(1,exp(postnext-postcur)))
     un <- runif(1)<alpha
     accept <- as.numeric(un)
+    if (debug) {
+        saveprm(paste0("## <1> ", "Old value of ", nam, " (log-posterior=", postcur,"):"),
+                "prev", prev, dumpfile)
+        saveprm(paste0("## <2> ", "Proposal value of ", nam, " (log-posterior=", postnext,"):"),
+                "nex", nex, dumpfile)
+        cat(paste0("## <3> Metropolis ratio: min(1,",
+                   exp(postnext-postcur)),")\n", file=dumpfile, append=TRUE)
+        rrr <- prev
+        if (un)
+            rrr <- nex
+        saveprm(c("## <4> We accept", "## <4> We reject")[c(un,!un)],
+                paste0("par[[\"", nam, "\"]] "), rrr, dumpfile)
+    }
+
     if (un) {
         parm <- nex
         postcur <- postnext
@@ -565,6 +653,11 @@ MultiNormalStep <- function(par, lidat, nam, pum, ctrl, logposterior,
 #' @param thinAcc an integer giving the number of steps separating
 #' the storage of the vector describing whether the proposal has been
 #' accepted or not
+#' @param composition character. Determines in which order the
+#' parameters are updated. Either \code{"fixed"} (the default), in
+#' which case the parameters are updated in the order provided in
+#' \code{parInit}, or \code{"random"}, in which case the parameters
+#' are updated in a random order at each step.
 #' @param verbose logical. Whether information should be displayed to
 #' the user.
 #' @param saveResults logical. Whether the results should be saved in a file.
@@ -572,6 +665,16 @@ MultiNormalStep <- function(par, lidat, nam, pum, ctrl, logposterior,
 #' generated values (for backup)?
 #' @param fileSave character string. The name of the Rdata file used to
 #' save the results.
+#' @param debug logical. Whether the chain should be debugged (in this
+#' case, the whole state of the chain is stored in a dump file,
+#' storing a list with one element per iteration, storing the whole
+#' process). Debug mode is not possible for the function \code{restartGSM}.
+#' @param optionsDebug list with two elements named \code{showPar} and
+#' \code{showSeed} indicating what to show in the dump file at each
+#' iteration (at each iteration, the seed of the random number
+#' generator can be saved, as well as the value of the list of
+#' parameters, so that the user can focus on a particular step without
+#' bothering of the other steps).
 #' @param x an object of class GSMetrop.
 #' @param resuParms an object of class GSMetrop.
 #' @param another an integer giving the number of iterations required
@@ -584,6 +687,16 @@ MultiNormalStep <- function(par, lidat, nam, pum, ctrl, logposterior,
 #' (every \code{saveEvery} iterations) in a list of class
 #' \code{GSMetrop} named \code{libackup}, saved in a file named
 #' \code{fileSave}. This object can be retrieved with \code{reloadGSM}.
+#'
+#' @note The debug mode produces a temporary file with a name starting
+#' by \code{dumpmetrop***.R}, which contains the R code corresponding
+#' to the state of the chain at each step (old value of the parameter,
+#' proposed value, etc.). This file contains all the elements required
+#' to understand the state of the chain. At the top of the file, the
+#' function includes R code that allows to explore the chain in
+#' another session (i.e. the code in this file does not rely on the
+#' global environment). The arguments of the functions are restored in
+#' the environment at the beginning of the file.
 #'
 #' @return A list of class "GSMetrop", where each element corresponds
 #' to one parameter, and where each element is a matrix containing the
@@ -697,8 +810,10 @@ MultiNormalStep <- function(par, lidat, nam, pum, ctrl, logposterior,
 GeneralSingleMetropolis <- function(parInit, lidat, logposterior, lipum, listUpdating=NULL,
                                     liopt = NULL, nrepet=999, nburnin=10, thinPar = 1,
                                     thinAcc = thinPar,
+                                    composition=c("fixed","random"),
                                     verbose=TRUE, saveResults=TRUE, saveEvery=1000,
-                                    fileSave="saveMetrop.Rdata")
+                                    fileSave="saveMetrop.Rdata", debug=FALSE,
+                                    optionsDebug=list(showSeed=FALSE, showPar=TRUE))
 {
     ## Starts duration
     startTime <- proc.time()
@@ -717,6 +832,9 @@ GeneralSingleMetropolis <- function(parInit, lidat, logposterior, lipum, listUpd
     ## checks updating mechanisms
     if (!all(unlist(listUpdating%in%c("mis", "mns", "sis"))))
         stop("Not allowed updating mechanisms")
+
+    ## checks the composition
+    composition <- match.arg(composition)
 
     ## checks arguments of logposterior
     ar <- names(formals(logposterior))
@@ -737,6 +855,58 @@ GeneralSingleMetropolis <- function(parInit, lidat, logposterior, lipum, listUpd
                        list(namePar=names(parInit)[1], iter=1))
     if (is.infinite(lp))
         stop("bad starting values for the parameters (infinite log-posterior)")
+
+    ## The seed
+    seedinit <- .save_rng()
+
+
+    ## If debugging
+    if (debug) {
+        ## Check the debugging options
+        na <- c("showPar", "showSeed")
+        def <- list(showSeed=FALSE, showPar=TRUE)
+        if (!all(na%in%names(optionsDebug))) {
+            warning("Some elements are missing in optionsDebug.\nDefault values are used for these elements")
+            optionsDebug <- lapply(na, function(i) {
+                                       if (!any(names(optionsDebug)==i))
+                                           return(def[[i]])
+                                       return(optionsDebug[[i]])
+                                   })
+            names(optionsDebug) <- na
+        }
+
+        tempf2 <- tempfile("dumpmetrop", tmpdir=".", fileext = ".R")
+        tempf <- tempfile("dumpargs", tmpdir=".", fileext = ".Rdata")
+        liargs <- list(parInit=parInit, lidat=lidat, logposterior=logposterior,
+                       lipum=lipum, listUpdating=listUpdating,
+                       liopt = liopt, nrepet=nrepet, nburnin=nburnin, thinPar = thinPar,
+                       thinAcc = thinAcc, composition=composition,
+                       verbose=verbose, saveResults=saveResults, saveEvery=saveEvery,
+                       fileSave=fileSave, debug=TRUE, seedInit=seedinit)
+        save(liargs, file=tempf)
+        cat("Debugging mode: the file", tempf2,"describes the MCMC process\n\n")
+        cat("## *****************************************************\n",
+            "## *                                                   *\n",
+            "## *     Debug output for GeneralSingleMetropolis      *\n",
+            "## *                                                   *\n",
+            "## *****************************************************\n\n\n",
+            "## The arguments of the functions are stored in the file ", tempf,
+            "\n",
+            "## Restores the environment\n",
+            "load(\"",tempf,"\")\n\n",
+            "## Assigns the value of the arguments\n",
+            "for (i in names(liargs)) {\nassign(i, liargs[[i]], envir=.GlobalEnv)\n}\n\n",
+            "## Restore the seed\n",
+            "metroponcfs:::.restore_rng(seedInit)\n\n",
+            file=tempf2, sep="")
+        saveprm("## Starting value of the parameters", "par", parInit, tempf2)
+        cat("\n\n\n\n\n\n\n\n\n", append=TRUE, file=tempf2)
+
+    } else {
+        tempf2 <- NA
+    }
+
+
 
     ## We pass the list to par
     par <- parInit
@@ -769,11 +939,13 @@ GeneralSingleMetropolis <- function(parInit, lidat, logposterior, lipum, listUpd
                                                        x[[na]]
                                                    }))
                           })
+        seedend <- .save_rng()
         names(resuParms) <- names(par)
         names(resuAcc) <- names(par)
         attr(resuParms, "AcceptationRate") <- resuAcc
         attr(resuParms, "thinPar") <- thinPar
         attr(resuParms, "thinAcc") <- thinAcc
+        attr(resuParms, "composition") <- composition
         attr(resuParms, "nburnin") <- nburnin
         prestime <- proc.time()
         attr(resuParms, "duration") <- (prestime-startTime)
@@ -785,6 +957,8 @@ GeneralSingleMetropolis <- function(parInit, lidat, logposterior, lipum, listUpd
         attr(resuParms, "saveResults") <- saveResults
         attr(resuParms, "saveEvery") <- saveEvery
         attr(resuParms, "fileSave") <- fileSave
+        attr(resuParms, "seedInit") <- seedinit
+        attr(resuParms, "seedEnd") <- seedend
         if (!is.null(liopt))
             attr(resuParms,"liopt") <- liopt
         attr(resuParms, "fileSave") <- fileSave
@@ -803,7 +977,12 @@ GeneralSingleMetropolis <- function(parInit, lidat, logposterior, lipum, listUpd
         if (verbose)
             cat("Iteration", r, "\r")
 
-        im <- .iterMetrop(par, lidat, logposterior, lipum, NamesP, UpdatingMechanism, liopt)
+        if (debug)
+            cat("## ******************** MCMC Iteration", r, " #######################\n",
+                file=tempf2, append=TRUE)
+
+        im <- .iterMetrop(par, lidat, logposterior, lipum, NamesP, UpdatingMechanism,
+                          liopt, composition, debug, tempf2, optionsDebug)
         par <- im$par
         accept <- im$accept
 
@@ -844,6 +1023,9 @@ restartGSM <- function(resuParms, another=1000)
     ## No need to check the other arguments, the class
     ## "backupMetropolis" says it all
 
+    ## Backs up the global seed
+    globseed <- .save_rng()
+
     ## Reassigns arguments
     liparms <- lapply(1:nrow(resuParms[[1]]), function(i) {
                           lapply(resuParms, function(x) x[i,])
@@ -856,6 +1038,7 @@ restartGSM <- function(resuParms, another=1000)
     resuAcc <- attr(resuParms, "AcceptationRate")
     thinPar <- attr(resuParms, "thinPar")
     thinAcc <- attr(resuParms, "thinAcc")
+    composition <- attr(resuParms, "composition")
     nburnin <- attr(resuParms, "nburnin")
     liopt <- attr(resuParms, "liopt")
     nburnin <- attr(resuParms, "nburnin")
@@ -868,6 +1051,11 @@ restartGSM <- function(resuParms, another=1000)
     saveResults <- attr(resuParms, "saveResults")
     saveEvery <- attr(resuParms, "saveEvery")
     fileSave <- attr(resuParms, "fileSave")
+    seedinit <- attr(resuParms, "seedInit")
+    seedend <- attr(resuParms, "seedEnd")
+
+    ## restore the seed
+    .restore_rng(seedend)
 
     ## current value of the parameters
     par <- getParameterVector(resuParms, nrow(resuParms[[1]]))
@@ -897,11 +1085,13 @@ restartGSM <- function(resuParms, another=1000)
                                                        x[[na]]
                                                    }))
                           })
+        seedend <- .save_rng()
         names(resuParms) <- names(par)
         names(resuAcc) <- names(par)
         attr(resuParms, "AcceptationRate") <- resuAcc
         attr(resuParms, "thinPar") <- thinPar
         attr(resuParms, "thinAcc") <- thinAcc
+        attr(resuParms, "composition") <- composition
         attr(resuParms, "nburnin") <- nburnin
         prestime <- proc.time()
         attr(resuParms, "duration") <- duration+(prestime-startTime)
@@ -913,6 +1103,8 @@ restartGSM <- function(resuParms, another=1000)
         attr(resuParms, "saveEvery") <- saveEvery
         attr(resuParms, "saveResults") <- saveResults
         attr(resuParms, "fileSave") <- fileSave
+        attr(resuParms, "seedInit") <- seedinit
+        attr(resuParms, "seedEnd") <- seedend
         if (!is.null(liopt))
             attr(resuParms,"liopt") <- liopt
         class(resuParms) <- "GSMetrop"
@@ -930,7 +1122,7 @@ restartGSM <- function(resuParms, another=1000)
             cat("Iteration", r, "\r")
 
         im <- .iterMetrop(par, lidat, logposterior, lipum, NamesP, UpdatingMechanism,
-                          liopt)
+                          liopt, composition, FALSE, NA)
         par <- im$par
         accept <- im$accept
 
@@ -954,6 +1146,9 @@ restartGSM <- function(resuParms, another=1000)
     if (!is.na(fileSave)) {
         resuParms <- saveMetrop(r)
     }
+
+    ## Restores the globalseed
+    .restore_rng(globseed)
 
     return(resuParms)
 }
