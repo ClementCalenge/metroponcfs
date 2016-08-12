@@ -1490,6 +1490,8 @@ c.GSMetrop <- function(...)
     ## same values for the attributes
     liatb <- lapply(liat, function(x) {x$logposterior <- NULL;return(x)})
     liatb <- lapply(liatb, function(x) {x$fileSave <- NULL;return(x)})
+    liatb <- lapply(liatb, function(x) {x$seedInit <- NULL;return(x)})
+    liatb <- lapply(liatb, function(x) {x$seedEnd <- NULL;return(x)})
     tmp <- lapply(1:length(liatb[[1]]), function(i) {
         la <- lapply(1:length(liatb), function(j) liatb[[j]][[i]])
         if (!all(sapply(1:length(la), function(j) identical(la[[j]],la[[1]]))))
@@ -1506,18 +1508,24 @@ c.GSMetrop <- function(...)
         acc <- attr(x,"AcceptationRate")
         dur <- attr(x,"duration")
         fs <- attr(x,"fileSave")
+        sin <- attr(x,"seedInit")
+        sen <- attr(x,"seedEnd")
         nam <- names(x)
         attributes(x) <- NULL
         names(x) <- nam
         attr(x,"duration") <- dur
         attr(x,"AcceptationRate") <- acc
         attr(x,"fileSave") <- fs
+        attr(x,"seedInit") <- sin
+        attr(x,"seedEnd") <- sen
         return(x)
     })
     liat <- lapply(li, function(x) {
         attr(x,"AcceptationRate") <- NULL
         attr(x,"duration") <- NULL
         attr(x,"fileSave") <- NULL
+        attr(x,"seedInit") <- NULL
+        attr(x,"seedEnd") <- NULL
         names(x) <- NULL
         return(attributes(x))
     })
