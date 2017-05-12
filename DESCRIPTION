@@ -6,7 +6,7 @@ Date: 2016-07-04
 Author: Clement Calenge
 Maintainer: Clement Calenge <clement.calenge@oncfs.gouv.fr>
 Depends: R (>= 3.0.1), MASS, coda
-Suggests: knitr, sp, rworldmap, rworldxtra, splines, spatstat
+Suggests: knitr, sp, rworldmap, rworldxtra, splines, spatstat, adehabitatMA, rgeos
 Description: this package implements the Metropolis algorithm.
 VignetteBuilder: knitr
 LazyData: true
