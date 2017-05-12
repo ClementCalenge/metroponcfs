@@ -109,6 +109,34 @@ NULL
 "rectealmodeltime"
 
 
+#' @title Results of the Sensitivity Analysis for the Rotation Angles
+#'
+#' @details This model is fully described in the vignette "flyways".
+#' Please type \code{vignette("flyways")} for more details.
+#'
+#' @format A list with three elements named \code{fit} (containing the
+#' model fits), \code{proportion} and \code{differenceWithRef}.
+#'
+#' @references Guillemain M., Calenge C., Champagnon J. and Hearn
+#' R. in prep. Determining the boundaries and plasticity of migratory
+#' bird flyways: a Bayesian model for Common Teal Anas crecca
+#' in Western Europe.
+"sensitivityAngles"
+
+#' @title Results of the Sensitivity Analysis for the Number of B-spline Functions
+#'
+#' @details This model is fully described in the vignette "flyways".
+#' Please type \code{vignette("flyways")} for more details.
+#'
+#' @format A list with three elements named \code{fit} (containing the
+#' model fits), \code{proportion} and \code{differenceWithRef}.
+#'
+#' @references Guillemain M., Calenge C., Champagnon J. and Hearn
+#' R. in prep. Determining the boundaries and plasticity of migratory
+#' bird flyways: a Bayesian model for Common Teal Anas crecca
+#' in Western Europe.
+"sensitivityBsplines"
+
 
 
 #' @title Find Starting Values for the Metropolis Algorithm
