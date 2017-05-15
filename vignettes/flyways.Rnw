@@ -1220,16 +1220,9 @@ for (i in 1:5) {
 rectealmodeltime <- do.call(c,observe)
 @
 
-The results are stored in the object \texttt{rectealmodeltime}. We can
-plot these chains:
-
-<<model-time-mixing>>=
-data(rectealmodeltime)
-plot(rectealmodeltime)
-@
-
-Finally, we compared the DIC of the model accounting for time changes
-in the parameters and the DIC of the original model:
+The results are stored in the object \texttt{rectealmodeltime}. We
+compared the DIC of the model accounting for time changes in the
+parameters and the DIC of the original model:
 
 <<deviance-information-criterion>>=
 ## Here, the log-posterior is the same as the log-likelihood.
@@ -1237,13 +1230,8 @@ in the parameters and the DIC of the original model:
 (DIC_time <- DIC(rectealmodeltime, logposteriorModelFlywaysTime))
 @
 
-XXThe numbers are incorrect here (previous model with uniform prior on
-the logit scale). I am waiting for the calculations to end.
-
-Note that here, the two DIC are similar, though the model accounting
-for time is slightly better. The DIC difference is too small to
-justify the additional fit of 9 additional parameters, so that the
-original model is better.
+The DIC difference is clearly in favor of the simpler model, so that
+the original model is better.
 
 
 \section{Sensitivity analysis}
